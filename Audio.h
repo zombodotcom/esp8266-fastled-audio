@@ -49,6 +49,7 @@ float gainAGC = 0.0;
 uint8_t spectrumByte[7];        // holds 8-bit adjusted adc values
 
 uint8_t spectrumAvg;
+uint8_t trebleAvg;
 
 unsigned long currentMillis; // store current loop's millis value
 unsigned long audioMillis; // store time of last audio update
@@ -96,6 +97,9 @@ void readAudio() {
 
     // prepare average for AGC
     analogsum += spectrumValue[i];
+     
+    if(i!=0 && i!=1)
+       treblesum += spectrumValue[i];
 
     // apply current gain value
     spectrumValue[i] *= gainAGC;
@@ -112,7 +116,7 @@ void readAudio() {
 
   // Calculate audio levels for automatic gain
   audioAvg = (1.0 - AGCSMOOTH) * audioAvg + AGCSMOOTH * (analogsum / 7.0);
-
+  trebleAvg = (treblesum / 5.0) / 4;
   spectrumAvg = (analogsum / 7.0) / 4;
 
   // Calculate gain adjustment factor
@@ -124,13 +128,13 @@ void readAudio() {
 // Attempt at beat detection
 byte beatTriggered = 0;
 #define beatLevel 20.0
-#define beatDeadzone 30.0
+#define beatDeadzone 20.0
 #define beatDelay 50
 float lastBeatVal = 0;
 byte beatDetect() {
   static float beatAvg = 0;
   static unsigned long lastBeatMillis;
-  float specCombo = (spectrumDecay[0] + spectrumDecay[1]) / 2.0;
+  float specCombo = spectrumDecay[0];
   beatAvg = (1.0 - AGCSMOOTH) * beatAvg + AGCSMOOTH * specCombo;
 
   if (lastBeatVal < beatAvg) lastBeatVal = beatAvg;
@@ -147,239 +151,24 @@ byte beatDetect() {
   }
 }
 
-void fade_down(uint8_t value) {
-  for (int i = 0; i < NUM_LEDS; i++)
-  {
-    leds[i].fadeToBlackBy(value);
-  }
-}
-
-void spectrumPaletteWaves()
-{
-//  fade_down(1);
-
-  CRGB color6 = ColorFromPalette(gCurrentPalette, spectrumByte[6], spectrumByte[6]);
-  CRGB color5 = ColorFromPalette(gCurrentPalette, spectrumByte[5] / 8, spectrumByte[5] / 8);
-  CRGB color1 = ColorFromPalette(gCurrentPalette, spectrumByte[1] / 2, spectrumByte[1] / 2);
-
-  CRGB color = nblend(color6, color5, 256 / 8);
-  color = nblend(color, color1, 256 / 2);
-
-  leds[CENTER_LED] = color;
-  leds[CENTER_LED].fadeToBlackBy(spectrumByte[3] / 12);
-
-  leds[CENTER_LED - 1] = color;
-  leds[CENTER_LED - 1].fadeToBlackBy(spectrumByte[3] / 12);
-
-  //move to the left
-  for (int i = NUM_LEDS - 1; i > CENTER_LED; i--) {
-    leds[i] = leds[i - 1];
-  }
-  // move to the right
-  for (int i = 0; i < CENTER_LED; i++) {
-    leds[i] = leds[i + 1];
-  }
-}
-
-void spectrumPaletteWaves2()
-{
-//  fade_down(1);
-
-  CRGBPalette16 palette = palettes[currentPaletteIndex];
-
-  CRGB color6 = ColorFromPalette(palette, 255 - spectrumByte[6], spectrumByte[6]);
-  CRGB color5 = ColorFromPalette(palette, 255 - spectrumByte[5] / 8, spectrumByte[5] / 8);
-  CRGB color1 = ColorFromPalette(palette, 255 - spectrumByte[1] / 2, spectrumByte[1] / 2);
-
-  CRGB color = nblend(color6, color5, 256 / 8);
-  color = nblend(color, color1, 256 / 2);
-
-  leds[CENTER_LED] = color;
-  leds[CENTER_LED].fadeToBlackBy(spectrumByte[3] / 12);
-
-  leds[CENTER_LED - 1] = color;
-  leds[CENTER_LED - 1].fadeToBlackBy(spectrumByte[3] / 12);
-
-  //move to the left
-  for (int i = NUM_LEDS - 1; i > CENTER_LED; i--) {
-    leds[i] = leds[i - 1];
-  }
-  // move to the right
-  for (int i = 0; i < CENTER_LED; i++) {
-    leds[i] = leds[i + 1];
-  }
-}
-
-void spectrumWaves()
-{
-  fade_down(2);
-
-  CRGB color = CRGB(spectrumByte[6], spectrumByte[5] / 8, spectrumByte[1] / 2);
-
-  leds[CENTER_LED] = color;
-  leds[CENTER_LED].fadeToBlackBy(spectrumByte[3] / 12);
-
-  leds[CENTER_LED - 1] = color;
-  leds[CENTER_LED - 1].fadeToBlackBy(spectrumByte[3] / 12);
-
-  //move to the left
-  for (int i = NUM_LEDS - 1; i > CENTER_LED; i--) {
-    leds[i] = leds[i - 1];
-  }
-  // move to the right
-  for (int i = 0; i < CENTER_LED; i++) {
-    leds[i] = leds[i + 1];
-  }
-}
-
-void spectrumWaves2()
-{
-  fade_down(2);
-
-  CRGB color = CRGB(spectrumByte[5] / 8, spectrumByte[6], spectrumByte[1] / 2);
-
-  leds[CENTER_LED] = color;
-  leds[CENTER_LED].fadeToBlackBy(spectrumByte[3] / 12);
-
-  leds[CENTER_LED - 1] = color;
-  leds[CENTER_LED - 1].fadeToBlackBy(spectrumByte[3] / 12);
-
-  //move to the left
-  for (int i = NUM_LEDS - 1; i > CENTER_LED; i--) {
-    leds[i] = leds[i - 1];
-  }
-  // move to the right
-  for (int i = 0; i < CENTER_LED; i++) {
-    leds[i] = leds[i + 1];
-  }
-}
-
-void spectrumWaves3()
-{
-  fade_down(2);
-
-  CRGB color = CRGB(spectrumByte[1] / 2, spectrumByte[5] / 8, spectrumByte[6]);
-
-  leds[CENTER_LED] = color;
-  leds[CENTER_LED].fadeToBlackBy(spectrumByte[3] / 12);
-
-  leds[CENTER_LED - 1] = color;
-  leds[CENTER_LED - 1].fadeToBlackBy(spectrumByte[3] / 12);
-
-  //move to the left
-  for (int i = NUM_LEDS - 1; i > CENTER_LED; i--) {
-    leds[i] = leds[i - 1];
-  }
-  // move to the right
-  for (int i = 0; i < CENTER_LED; i++) {
-    leds[i] = leds[i + 1];
-  }
-}
-
-void analyzerColumns()
-{
-  fill_solid(leds, NUM_LEDS, CRGB::Black);
-
-  const uint8_t columnSize = NUM_LEDS / 7;
-
-  for (uint8_t i = 0; i < 7; i++) {
-    uint8_t columnStart = i * columnSize;
-    uint8_t columnEnd = columnStart + columnSize;
-
-    if (columnEnd >= NUM_LEDS) columnEnd = NUM_LEDS - 1;
-
-    uint8_t columnHeight = map8(spectrumByte[i], 1, columnSize);
-
-    for (uint8_t j = columnStart; j < columnStart + columnHeight; j++) {
-      if (j >= NUM_LEDS || j >= columnEnd)
-        continue;
-
-      leds[j] = CHSV(i * 40, 255, 255);
-    }
-  }
-}
-
-void analyzerPeakColumns()
-{
-  fill_solid(leds, NUM_LEDS, CRGB::Black);
-
-  const uint8_t columnSize = NUM_LEDS / 7;
-
-  for (uint8_t i = 0; i < 7; i++) {
-    uint8_t columnStart = i * columnSize;
-    uint8_t columnEnd = columnStart + columnSize;
-
-    if (columnEnd >= NUM_LEDS) columnEnd = NUM_LEDS - 1;
-
-    uint8_t columnHeight = map(spectrumValue[i], 0, 1023, 0, columnSize);
-    uint8_t peakHeight = map(spectrumPeaks[i], 0, 1023, 0, columnSize);
-
-    for (uint8_t j = columnStart; j < columnStart + columnHeight; j++) {
-      if (j < NUM_LEDS && j <= columnEnd) {
-        leds[j] = CHSV(i * 40, 255, 128);
-      }
-    }
-
-    uint8_t k = columnStart + peakHeight;
-    if (k < NUM_LEDS && k <= columnEnd)
-      leds[k] = CHSV(i * 40, 255, 255);
-  }
-}
-
-void beatWaves()
-{
-  fade_down(2);
-
-  if (beatDetect()) {
-    leds[CENTER_LED] = CRGB::Red;
-  }
-
-  //move to the left
-  for (int i = NUM_LEDS - 1; i > CENTER_LED; i--) {
-    leds[i] = leds[i - 1];
-  }
-  // move to the right
-  for (int i = 0; i < CENTER_LED; i++) {
-    leds[i] = leds[i + 1];
-  }
-}
-
-
-#define VUFadeFactor 5
-#define VUScaleFactor 2.0
-#define VUPaletteFactor 1.5
-void drawVU() {
-  CRGB pixelColor;
-
-  const float xScale = 255.0 / (NUM_LEDS / 2);
-  float specCombo = (spectrumDecay[0] + spectrumDecay[1] + spectrumDecay[2] + spectrumDecay[3]) / 4.0;
-
-  for (byte x = 0; x < NUM_LEDS / 2; x++) {
-    int senseValue = specCombo / VUScaleFactor - xScale * x;
-    int pixelBrightness = senseValue * VUFadeFactor;
-    if (pixelBrightness > 255) pixelBrightness = 255;
-    if (pixelBrightness < 0) pixelBrightness = 0;
-
-    int pixelPaletteIndex = senseValue / VUPaletteFactor - 15;
-    if (pixelPaletteIndex > 240) pixelPaletteIndex = 240;
-    if (pixelPaletteIndex < 0) pixelPaletteIndex = 0;
-
-    pixelColor = ColorFromPalette(palettes[currentPaletteIndex], pixelPaletteIndex, pixelBrightness);
-
-    leds[x] = pixelColor;
-    leds[NUM_LEDS - x - 1] = pixelColor;
-  }
-}
-
-void drawVU2() {
-  uint8_t avg = map8(spectrumAvg, 0, NUM_LEDS - 1);
-  
-  for (uint8_t i = 0; i < NUM_LEDS; i++) {
-    if(i <= avg) {
-      leds[i] = ColorFromPalette(palettes[currentPaletteIndex], (240 / NUM_LEDS) * i);
-    }
-    else {
-      leds[i] = CRGB::Black;
-    }
-  }
+byte   trebTriggered = 0;
+#define    trebLevel  6.0
+#define trebDeadzone  9.0
+float lastTrebVal = 0;
+byte trebDetect(){
+  static float trebAvg = 0;
+  static unsigned long lastTrebMillis;
+  float specCombo = spectrumByte[6];
+  trebAvg = (1.0-AGCSMOOTH)*trebAvg + AGCSMOOTH*specCombo;
+  if(lastTrebVal<trebAvg) lastTrebVal = trebAvg;
+  if(specCombo-trebAvg > trebLevel && trebTriggered==0){
+    trebTriggered = 1;
+    lastTrebVal = specCombo;
+    lastTrebMillis = currentMillis;
+    return 1;
+  } else if(lastTrebVal-specCombo > trebDeadzone){
+    trebTriggered = 0;
+    return 0;
+  } else
+    return 0;
 }
