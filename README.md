@@ -1,3 +1,5 @@
+My own optimization of Jason Coon's powerful web app.
+
 FastLED + ESP8266 Web Server
 =========
 
