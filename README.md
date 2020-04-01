@@ -75,10 +75,5 @@ Hook the MSGEQ7 breakout board up:
 #define MSGEQ7_RESET_PIN  D3
 ```
 
-Infrared Remote Control
------------------------
-
-Control via infrared remote control is also supported, via the [ESP8266 port of the IRremote library](https://github.com/markszabo/IRremoteESP8266).
-
 [Adafruit NeoPixel Ring]:https://www.adafruit.com/product/1586
 [Adafruit HUZZAH ESP8266 Breakout]:https://www.adafruit.com/products/2471
