@@ -1,118 +1,159 @@
-// based on ColorTwinkles by Mark Kriegsman: https://gist.github.com/kriegsman/5408ecd397744ba0393e
+//  TwinkleFOX by Mark Kriegsman: https://gist.github.com/kriegsman/756ea6dcae8e30845b5a
+//
+//  TwinkleFOX: Twinkling 'holiday' lights that fade in and out.
+//  Colors are chosen from a palette; a few palettes are provided.
+//
+//  This December 2015 implementation improves on the December 2014 version
+//  in several ways:
+//  - smoother fading, compatible with any colors and any palettes
+//  - easier control of twinkle speed and twinkle density
+//  - supports an optional 'background color'
+//  - takes even less RAM: zero RAM overhead per pixel
+//  - illustrates a couple of interesting techniques (uh oh...)
+//
+//  The idea behind this (new) implementation is that there's one
+//  basic, repeating pattern that each pixel follows like a waveform:
+//  The brightness rises from 0..255 and then falls back down to 0.
+//  The brightness at any given point in time can be determined as
+//  as a function of time, for example:
+//    brightness = sine( time ); // a sine wave of brightness over time
+//
+//  So the way this implementation works is that every pixel follows
+//  the exact same wave function over time.  In this particular case,
+//  I chose a sawtooth triangle wave (triwave8) rather than a sine wave,
+//  but the idea is the same: brightness = triwave8( time ).
+//
+//  Of course, if all the pixels used the exact same wave form, and
+//  if they all used the exact same 'clock' for their 'time base', all
+//  the pixels would brighten and dim at once -- which does not look
+//  like twinkling at all.
+//
+//  So to achieve random-looking twinkling, each pixel is given a
+//  slightly different 'clock' signal.  Some of the clocks run faster,
+//  some run slower, and each 'clock' also has a random offset from zero.
+//  The net result is that the 'clocks' for all the pixels are always out
+//  of sync from each other, producing a nice random distribution
+//  of twinkles.
+//
+//  The 'clock speed adjustment' and 'time offset' for each pixel
+//  are generated randomly.  One (normal) approach to implementing that
+//  would be to randomly generate the clock parameters for each pixel
+//  at startup, and store them in some arrays.  However, that consumes
+//  a great deal of precious RAM, and it turns out to be totally
+//  unnessary!  If the random number generate is 'seeded' with the
+//  same starting value every time, it will generate the same sequence
+//  of values every time.  So the clock adjustment parameters for each
+//  pixel are 'stored' in a pseudo-random number generator!  The PRNG
+//  is reset, and then the first numbers out of it are the clock
+//  adjustment parameters for the first pixel, the second numbers out
+//  of it are the parameters for the second pixel, and so on.
+//  In this way, we can 'store' a stable sequence of thousands of
+//  random clock adjustment parameters in literally two bytes of RAM.
+//
+//  There's a little bit of fixed-point math involved in applying the
+//  clock speed adjustments, which are expressed in eighths.  Each pixel's
+//  clock speed ranges from 8/8ths of the system clock (i.e. 1x) to
+//  23/8ths of the system clock (i.e. nearly 3x).
+//
+//  On a basic Arduino Uno or Leonardo, this code can twinkle 300+ pixels
+//  smoothly at over 50 updates per seond.
+//
+//  -Mark Kriegsman, December 2015
 
-#define STARTING_BRIGHTNESS 64
-#define FADE_IN_SPEED       32
-#define FADE_OUT_SPEED      20
-#define DENSITY            255
+CRGB gBackgroundColor = CRGB::Black;
 
-enum { GETTING_DARKER = 0, GETTING_BRIGHTER = 1 };
+#define AUTO_SELECT_BACKGROUND_COLOR 0
+#define COOL_LIKE_INCANDESCENT 1
 
-CRGB makeBrighter( const CRGB& color, fract8 howMuchBrighter)
-{
-  CRGB incrementalColor = color;
-  incrementalColor.nscale8( howMuchBrighter);
-  return color + incrementalColor;
-}
-
-CRGB makeDarker( const CRGB& color, fract8 howMuchDarker)
-{
-  CRGB newcolor = color;
-  newcolor.nscale8( 255 - howMuchDarker);
-  return newcolor;
-}
-
-// Compact implementation of
-// the directionFlags array, using just one BIT of RAM
-// per pixel.  This requires a bunch of bit wrangling,
-// but conserves precious RAM.  The cost is a few
-// cycles and about 100 bytes of flash program memory.
-uint8_t  directionFlags[ (NUM_LEDS + 7) / 8];
-
-bool getPixelDirection( uint16_t i)
-{
-  uint16_t index = i / 8;
-  uint8_t  bitNum = i & 0x07;
-
-  uint8_t  andMask = 1 << bitNum;
-  return (directionFlags[index] & andMask) != 0;
-}
-
-void setPixelDirection( uint16_t i, bool dir)
-{
-  uint16_t index = i / 8;
-  uint8_t  bitNum = i & 0x07;
-
-  uint8_t  orMask = 1 << bitNum;
-  uint8_t andMask = 255 - orMask;
-  uint8_t value = directionFlags[index] & andMask;
-  if ( dir ) {
-    value += orMask;
+uint8_t attackDecayWave8(uint8_t i){
+  if(i < 86) {
+    return i * 3;
+  } else {
+    i -= 86;
+    return 255 - (i + (i/2));
   }
-  directionFlags[index] = value;
 }
 
-void brightenOrDarkenEachPixel( fract8 fadeUpAmount, fract8 fadeDownAmount)
-{
-  for ( uint16_t i = 0; i < NUM_LEDS; i++) {
-    if ( getPixelDirection(i) == GETTING_DARKER) {
-      // This pixel is getting darker
-      leds[i] = makeDarker( leds[i], fadeDownAmount);
-    } else {
-      // This pixel is getting brighter
-      leds[i] = makeBrighter( leds[i], fadeUpAmount);
-      // now check to see if we've maxxed out the brightness
-      if ( leds[i].r == 255 || leds[i].g == 255 || leds[i].b == 255) {
-        // if so, turn around and start getting darker
-        setPixelDirection(i, GETTING_DARKER);
-      }
+void coolLikeIncandescent(CRGB& c, uint8_t phase){
+  if( phase < 128) return;
+
+  uint8_t cooling = (phase - 128) >> 4;
+  c.g = qsub8( c.g, cooling);
+  c.b = qsub8( c.b, cooling * 2);
+}
+
+CRGB computeOneTwinkle(uint32_t ms, uint8_t salt){
+  uint16_t ticks = ms >> (8-twnkSpd);
+  uint8_t fastcycle8 = ticks;
+  uint16_t slowcycle16 = (ticks >> 8) + salt;
+  slowcycle16 += sin8( slowcycle16);
+  slowcycle16 =  (slowcycle16 * 2053) + 1384;
+  uint8_t slowcycle8 = (slowcycle16 & 0xFF) + (slowcycle16 >> 8);
+
+  uint8_t bright = 0;
+  if( ((slowcycle8 & 0x0E)/2) < twnkDns) {
+    bright = attackDecayWave8( fastcycle8);
+  }
+
+  uint8_t hue = slowcycle8 - salt;
+  CRGB c;
+  if(bright > 0){
+    c = ColorFromPalette(palettes[currPalIdx], hue, bright, NOBLEND);
+    if(COOL_LIKE_INCANDESCENT == 1) {
+      coolLikeIncandescent(c, fastcycle8);
     }
+  } else {
+    c = CRGB::Black;
   }
+  return c;
 }
 
-void colortwinkles()
-{
-  EVERY_N_MILLIS(30)
-  {
-    // Make each pixel brighter or darker, depending on
-    // its 'direction' flag.
-    brightenOrDarkenEachPixel( FADE_IN_SPEED, FADE_OUT_SPEED);
+void drawTwinkles(){
+  uint16_t PRNG16 = 11337;
+
+  uint32_t clock32 = millis();
+
+  CRGBPalette16 currentPalette = palettes[currPalIdx];
+  CRGB bg;
   
-    // Now consider adding a new random twinkle
-    if ( random8() < DENSITY ) {
-      int pos = random16(NUM_LEDS);
-      if ( !leds[pos]) {
-        leds[pos] = ColorFromPalette( gCurrentPalette, random8(), STARTING_BRIGHTNESS, NOBLEND);
-        setPixelDirection(pos, GETTING_BRIGHTER);
-      }
+  if( (AUTO_SELECT_BACKGROUND_COLOR == 1) &&
+      (currentPalette[0] == currentPalette[1] )) {
+    bg = currentPalette[0];
+    uint8_t bglight = bg.getAverageLight();
+    if( bglight > 64) {
+      bg.nscale8_video( 16); // very bright, so scale to 1/16th
+    } else if( bglight > 16) {
+      bg.nscale8_video( 64); // not that bright, so scale to 1/4th
+    } else {
+      bg.nscale8_video( 86); // dim, scale to 1/3rd.
+    }
+  } else {
+    bg = gBackgroundColor; // just use the explicitly defined background color
+  }
+
+  uint8_t backgroundBrightness = bg.getAverageLight();
+
+  for(uint16_t i = 0; i < NUM_LEDS; i++) {
+    CRGB& pixel = leds[i];
+
+    PRNG16 = (uint16_t)(PRNG16 * 2053) + 1384; // next 'random' number
+    uint16_t myclockoffset16= PRNG16; // use that number as clock offset
+    PRNG16 = (uint16_t)(PRNG16 * 2053) + 1384; // next 'random' number
+    // use that number as clock speed adjustment factor (in 8ths, from 8/8ths to 23/8ths)
+    uint8_t myspeedmultiplierQ5_3 =  ((((PRNG16 & 0xFF)>>4) + (PRNG16 & 0x0F)) & 0x0F) + 0x08;
+    uint32_t myclock30 = (uint32_t)((clock32 * myspeedmultiplierQ5_3) >> 3) + myclockoffset16;
+    uint8_t  myunique8 = PRNG16 >> 8; // get 'salt' value for this pixel
+    
+    CRGB c = computeOneTwinkle( myclock30, myunique8);
+
+    uint8_t cbright = c.getAverageLight();
+    int16_t deltabright = cbright - backgroundBrightness;
+    if( deltabright >= 32 || (!bg)) {
+      pixel = c;
+    } else if( deltabright > 0 ) {
+      pixel = blend( bg, c, deltabright * 8);
+    } else {
+      pixel = bg;
     }
   }
 }
-
-void cloudTwinkles()
-{
-  gCurrentPalette = CloudColors_p; // Blues and whites!
-  colortwinkles();
-}
-
-void rainbowTwinkles()
-{
-  gCurrentPalette = RainbowColors_p;
-  colortwinkles();
-}
-
-void snowTwinkles()
-{
-  CRGB w(85, 85, 85), W(CRGB::White);
-
-  gCurrentPalette = CRGBPalette16( W, W, W, W, w, w, w, w, w, w, w, w, w, w, w, w );
-  colortwinkles();
-}
-
-void incandescentTwinkles()
-{
-  CRGB l(0xE1A024);
-
-  gCurrentPalette = CRGBPalette16( l, l, l, l, l, l, l, l, l, l, l, l, l, l, l, l );
-  colortwinkles();
-}
-
