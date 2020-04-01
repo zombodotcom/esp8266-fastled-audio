@@ -23,9 +23,9 @@
 // https://github.com/macetech/RGBShadesAudio
 
 // Pin definitions
-#define MSGEQ7_AUDIO_PIN A0
-#define MSGEQ7_STROBE_PIN D0
-#define MSGEQ7_RESET_PIN  D3
+#define  MSGEQ7_AUDIO_PIN A0
+#define MSGEQ7_STROBE_PIN D4
+#define  MSGEQ7_RESET_PIN D5
 
 #define AUDIODELAY 0
 
