@@ -70,9 +70,9 @@ Audio
 Hook the MSGEQ7 breakout board up:
 
 ```
-#define MSGEQ7_AUDIO_PIN A0
-#define MSGEQ7_STROBE_PIN D0
-#define MSGEQ7_RESET_PIN  D3
+#define  MSGEQ7_AUDIO_PIN A0
+#define MSGEQ7_STROBE_PIN D4
+#define  MSGEQ7_RESET_PIN D5
 ```
 
 [Adafruit NeoPixel Ring]:https://www.adafruit.com/product/1586
