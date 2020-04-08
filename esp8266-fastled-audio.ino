@@ -1,33 +1,11 @@
-/*
-   All patterns are mirrored except for T Lava
-   
-   ESP8266 + FastLED + Audio: https://github.com/jasoncoon/esp8266-fastled-audio
-   Copyright (C) 2015-2017 Jason Coon
-   
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
-   
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-   
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
 #define FASTLED_INTERRUPT_RETRY_COUNT 0
 //#define FASTLED_ALLOW_INTERRUPTS 0
 #include <FastLED.h>
-//#include <OctoWS2811.h>
 FASTLED_USING_NAMESPACE
 
 extern "C" {
   #include "user_interface.h"
 }
-
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPUpdateServer.h>
@@ -38,13 +16,13 @@ extern "C" {
 
 #define ARRAY_SIZE(A) (sizeof(A)/sizeof((A)[0]))
 
-#define HOSTNAME "8266-"
+#define HOSTNAME "Evo-"
 // Change apMode to true if you don't have a router
 const bool      apMode = false;
-const char WiFiAPPSK[] = "yourAPpassHERE";
+const char WiFiAPPSK[] = "yourAPpasswordHERE";
 // Change ssid and password to match your own network
-const char*       ssid = "yourSSIDhere";
-const char*   password = "yourPASShere";
+const char*       ssid = "This";
+const char*   password = "JorTor32";
 
 ESP8266WebServer webServer(80);
 WebSocketsServer webSocketsServer = WebSocketsServer(81);
@@ -52,25 +30,16 @@ ESP8266HTTPUpdateServer httpUpdateServer;
 
 #include "Field.h"
 #include "FSBrowser.h"
-// NUM_LEDS = HALF your LED count
+
 #define NUM_LEDS    300
-#define MILLI_AMPS 7500
-
-const uint8_t kMatrixWidth  = 18;
-const uint8_t kMatrixHeight = 18;
-const bool    kMatrixSerpentineLayout = true;
-#define MAX_DIMENSION ((kMatrixWidth>kMatrixHeight)? kMatrixWidth: kMatrixHeight)
-uint8_t noise[MAX_DIMENSION][MAX_DIMENSION];
-
-static uint16_t x;
-static uint16_t y;
-static uint16_t z;
+#define NUM_STRIPS    1
+#define MILLI_AMPS 5000
 
 uint8_t edges[26];
-uint8_t j[NUM_LEDS*2];
-uint8_t k[NUM_LEDS*2];
+uint8_t x[NUM_LEDS];
+uint8_t y[NUM_LEDS];
 
-CRGB leds[NUM_LEDS*2];
+CRGB leds[NUM_STRIPS * NUM_LEDS];
 // Snapshot
 CRGB last[NUM_LEDS];
 
@@ -140,6 +109,7 @@ PatternAndNameList patterns = {
 {        giantRuler2, "Giant Ruler 2"   },
 {        byteColumns, "Byte Analysis"   },
 {        peakColumns, "Peak Analysis"   },
+{      audioAnalyzer, "AudioAnalyzer"   },
 
 {            newFlow, "New Flow"        },
 {          besinFlow, "Besin Flow"      },
@@ -151,7 +121,7 @@ PatternAndNameList patterns = {
 {             TLava1, "T Lava"          },
 {             TLava2, "T Lava"          },
 {             TLava3, "T Lava"          },
-{           lavaLamp, "Lava Lamp"       },
+//{           lavaLamp, "Lava Lamp"       },
 {              pride, "Pride"           },
 {         colorWaves, "Color Waves"     },
 {       drawTwinkles, "Twinkles"        },
@@ -180,12 +150,15 @@ void setup(){
   WiFi.setSleepMode(WIFI_NONE_SLEEP);
   //Serial.begin(115200);
   delay(100);
-  // Displays IP in COM Viewer
-  Serial.setDebugOutput(true);
+  //Serial.setDebugOutput(true);
   initializeAudio();
-  FastLED.addLeds<WS2812B, 6, GRB>(leds, NUM_LEDS*2);     // 600
-  FastLED.addLeds<WS2812B, 7, GRB>(leds, NUM_LEDS*22/25); // 264
-  FastLED.addLeds<WS2811,  8, RGB>(leds, NUM_LEDS/2);     // 150
+  FastLED.addLeds<WS2812B, 6, GRB>(leds, 300);
+  //FastLED.addLeds<WS2812B, 7, GRB>(leds, 300);
+  FastLED.addLeds<WS2812B, 5, GRB>(leds, 264);
+  FastLED.addLeds<WS2811,  8, RGB>(leds, 150);
+  
+  // ESP8266 Pin Order = 6,7,5,8
+  //FastLED.addLeds<WS2811_PORTA,NUM_STRIPS>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setDither(false);
   FastLED.setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(brightness);
@@ -193,15 +166,12 @@ void setup(){
   fill_solid(leds, NUM_LEDS, CRGB::Black);
   FastLED.show();
   #include "web.h"
-  x = random16();
-  y = random16();
-  z = random16();
   for(byte b=0; b<=25; ++b)
     edges[b] = b==0? NUM_LEDS-1: NUM_LEDS/b-1;
-  for(uint16_t i=0; i<NUM_LEDS*2; i++){
+  for(uint16_t i=0; i<NUM_LEDS; i++){
     uint8_t angle = (i*256)/NUM_LEDS;
-    j[i] = cos8(angle);
-    k[i] = sin8(angle);
+    x[i] = cos8(angle);
+    y[i] = sin8(angle);
   }
 }
 
@@ -220,7 +190,7 @@ void loop(){
   webSocketsServer.loop();
   webServer.handleClient();
   if(power==0){
-    fill_solid(leds, NUM_LEDS*2, CRGB::Black);
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
     FastLED.show();
     return;
   }
@@ -246,9 +216,6 @@ void loop(){
     autoPalTimeout = millis()+(autoPalDur*1000);
   }
   patterns[currPatIdx].pattern();
-  if(patterns[currPatIdx].name!="T Lava")
-    for(int i=0; i<NUM_LEDS; i++)
-      leds[NUM_LEDS*2-i-1]=leds[i];
   FastLED.show();
 }
 

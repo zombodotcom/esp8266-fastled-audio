@@ -511,8 +511,6 @@ const TProgmemRGBGradientPalettePtr gGradientPalettes[] = {
   BlacK_Red_Magenta_Yellow_gp,
   Blue_Cyan_Yellow_gp };
 
-
 // Count of how many cpt-city gradients are defined:
 const uint8_t gGradientPaletteCount =
   sizeof( gGradientPalettes) / sizeof( TProgmemRGBGradientPalettePtr );
-

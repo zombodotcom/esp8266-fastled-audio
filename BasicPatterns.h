@@ -1,21 +1,3 @@
-/*
-   ESP8266 + FastLED + Audio: https://github.com/jasoncoon/esp8266-fastled-audio
-   Copyright (C) 2015-2017 Jason Coon
-   
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
-   
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-   
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
 void pauseAnimation(){}
 void giantRuler(){
   fill_solid(leds, NUM_LEDS, CRGB::Black);
@@ -123,17 +105,15 @@ void pride(){
   sHue16 += deltams * beatsin88( 400, 5, 9);
   uint16_t brightnesstheta16 = sPseudotime;
   for(uint16_t i=0 ; i<NUM_LEDS; i++){
-    hue16 += hueinc16;
+    inv? hue16+=hueinc16: hue16-=hueinc16;
     uint8_t hue8 = hue16/256;
     brightnesstheta16 += brightnessthetainc16;
     uint16_t b16 = sin16(brightnesstheta16)+32768;
     uint16_t bri16 = (uint32_t)((uint32_t)b16*(uint32_t)b16)/65536;
     uint8_t bri8 = (uint32_t)(((uint32_t)bri16)*brightdepth)/65536;
     bri8 += (255 - brightdepth);
-    CRGB newcolor = CHSV( hue8, sat8, bri8);
-    uint16_t pixelnumber = i;
-    pixelnumber = (NUM_LEDS - 1) - pixelnumber;
-    nblend(leds[pixelnumber], newcolor, 64);
+    CRGB newcolor = CHSV(hue8, sat8, bri8);
+    nblend(leds[dir? NUM_LEDS-1-i: i], newcolor, 64);
   }
 }
 
@@ -212,74 +192,14 @@ void colorWaves(){
   }
 }
 
-void fillnoise8(){
-  uint8_t spd = map(speed,0,25,0,50);
-  uint8_t scl = map(hueSpd,0,25,0,50);
-  uint8_t dataSmoothing = 0;
-  if(spd<50) dataSmoothing = 200 - (spd * 4);
-  for(int i=0; i<MAX_DIMENSION; i++){
-    int ioffset = scl * i;
-    for(int j=0; j<MAX_DIMENSION; j++){
-      int joffset = scl * j;
-      uint8_t data = inoise8(x + ioffset,y + joffset,z);
-      data = qsub8(data,16);
-      data = qadd8(data,scale8(data,39));
-      if(dataSmoothing){
-        uint8_t olddata = noise[i][j];
-        uint8_t newdata = scale8(olddata, dataSmoothing) + scale8(data, 256 - dataSmoothing);
-        data = newdata;
-      }
-      noise[i][j] = data;
-    }
-  }
-  z += spd;
-  x += spd / 8;
-  y -= spd / 16;
-}
-
-uint16_t XY(uint8_t x, uint8_t y){
-  uint16_t i;
-  if(kMatrixSerpentineLayout == false)
-    i = (y * kMatrixWidth) + x;
-  if(kMatrixSerpentineLayout == true){
-    if(y & 0x01) {
-      uint8_t reverseX = (kMatrixWidth - 1) - x;
-      i = (y * kMatrixWidth) + reverseX;
-    } else {
-      i = (y * kMatrixWidth) + x;
-    }
-  }
-  return i;
-}
-
-void mapNoiseToLEDsUsingPalette(){
-  static uint8_t ihue=0;
-  for(int i=0; i<kMatrixWidth; i++){
-    for(int j=0; j<kMatrixHeight; j++){
-      uint8_t index = noise[j][i];
-      uint8_t   bri = noise[i][j];
-      if(hmd) index += ihue;
-      bri = (bri>127)? 255: dim8_raw(bri*2);
-      CRGB color = ColorFromPalette(pmd? palettes[currPalIdx]:gCurrentPalette, index, bri);
-      leds[XY(i,j)] = color;
-    }
-  }
-  ihue+=1;
-}
-
-void lavaLamp(){
-  fillnoise8();
-  mapNoiseToLEDsUsingPalette();
-}
-
 // moves a noise up and down while slowly shifting to the side
 void TLava1() {
   uint8_t scale = glit;                               // the "zoom factor" for the noise
-  for(uint16_t i=0; i<NUM_LEDS*2; i++){
+  for(uint16_t i=0; i<NUM_LEDS; i++){
     uint16_t shift_x = beatsin8(17);                  // the x position of the noise field swings @ 17 bpm
     uint16_t shift_y = millis() / 100;                // the y position becomes slowly incremented
-    uint32_t real_x = (j[i] + shift_x) * scale;       // calculate the coordinates within the noise field
-    uint32_t real_y = (k[i] + shift_y) * scale;       // based on the precalculated positions
+    uint32_t real_x = (x[i] + shift_x) * scale;       // calculate the coordinates within the noise field
+    uint32_t real_y = (y[i] + shift_y) * scale;       // based on the precalculated positions
     uint8_t noise = inoise16(real_x, real_y, 4223) >> 8;           // get the noise data and scale it down
     uint8_t index = noise * speed;                        // map led color based on noise data
     //CRGB color = CHSV(index, 255, noise);
@@ -291,11 +211,11 @@ void TLava1() {
 // just moving along one axis = "lavalamp effect"
 void TLava2() {
   uint8_t scale = glit;                               // the "zoom factor" for the noise
-  for(uint16_t i=0; i<NUM_LEDS*2; i++){
+  for(uint16_t i=0; i<NUM_LEDS; i++){
     uint16_t shift_x = millis() / 10;                 // x as a function of time
     uint16_t shift_y = 0;
-    uint32_t real_x = (j[i] + shift_x) * scale;       // calculate the coordinates within the noise field
-    uint32_t real_y = (k[i] + shift_y) * scale;       // based on the precalculated positions
+    uint32_t real_x = (x[i] + shift_x) * scale;       // calculate the coordinates within the noise field
+    uint32_t real_y = (y[i] + shift_y) * scale;       // based on the precalculated positions
     uint8_t noise = inoise16(real_x, real_y, 4223) >> 8;           // get the noise data and scale it down
     uint8_t index = noise * speed;                        // map led color based on noise data
     //CRGB color = CHSV(index, 255, noise);
@@ -307,11 +227,11 @@ void TLava2() {
 // no x/y shifting but scrolling along z
 void TLava3(){
   uint8_t scale = glit;    // 232                           // the "zoom factor" for the noise
-  for(uint16_t i=0; i<NUM_LEDS*2; i++){
+  for(uint16_t i=0; i<NUM_LEDS; i++){
     uint16_t shift_x = 0;                             // no movement along x and y
     uint16_t shift_y = 0;
-    uint32_t real_x = (j[i] + shift_x) * scale;       // calculate the coordinates within the noise field
-    uint32_t real_y = (k[i] + shift_y) * scale;       // based on the precalculated positions
+    uint32_t real_x = (x[i] + shift_x) * scale;       // calculate the coordinates within the noise field
+    uint32_t real_y = (y[i] + shift_y) * scale;       // based on the precalculated positions
     uint32_t real_z = millis() * 20;                  // increment z linear
     uint8_t noise = inoise16(real_x, real_y, real_z) >> 8;           // get the noise data and scale it down
     uint8_t index = noise * speed; // (higher = more colors)  [3-8 recommended]

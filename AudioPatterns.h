@@ -1,21 +1,3 @@
-/*
-   ESP8266 + FastLED + Audio: https://github.com/jasoncoon/esp8266-fastled-audio
-   Copyright (C) 2015-2017 Jason Coon
-   
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
-   
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-   
-   You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
 CRGB c[] = { CRGB(255,0,0), CRGB(255,96,0), CRGB(255,255,0), CRGB(0,255,0), CRGB(0,255,255), CRGB(0,0,255), CRGB(255,0,255) };
 
 uint8_t f = 1;
@@ -81,13 +63,14 @@ void morph()    { mrs? goUp(): goDown(); }
 
 
 void newFlow(){ EVERY_N_SECONDS      (12){ morph(); }
-                EVERY_N_MILLISECONDS(100){ if(rgbRate>0){ --rgbRate;
-                                           if(rgbRate>5){ rgbRate-=rgbRate/5; } } }
+                EVERY_N_MILLISECONDS(50){ if(rgbRate>0) --rgbRate;
+                                          if(rgbRate>4) --rgbRate;}
                 if(bfd) fadeWhites(32);
                 if(tfd) fadeRGB(1);
                 if(mor) speed = morphs;
   bool   zero = speed==0? true: false;
-  uint8_t bri = pow((trebleAvg/13),2);
+  //uint8_t bri = pow((trebleAvg/15),2);
+  uint8_t bri = trebleAvg;
   uint16_t  k = edges[speed];
   if(!bmd&&!sv2){
     memcpy(leds, last, NUM_LEDS*3);
@@ -109,12 +92,25 @@ void newFlow(){ EVERY_N_SECONDS      (12){ morph(); }
   } else{ // beatDetect()
     if(trebDetect()) rgbRate+=3;
     if(hup) hmd? huey=gHue: dir? huey+=rgbRate: huey-=rgbRate;
-    leds[inv? zero? k: k>>1: 0] = ColorFromPalette(pmd? palettes[currPalIdx]: gCurrentPalette, huey, bri==0? 1: bri, LINEARBLEND);
+    leds[inv? zero? k: k>>1: 0] = ColorFromPalette(pmd? palettes[currPalIdx]: gCurrentPalette, huey, fmd? bri: 255, LINEARBLEND);
   }
   if(bri==0) leds[inv? zero? k: k>>1: 0] = CRGB(0,1,0);
   if(!zero) mirror(k);
   if(speed>1) copyIt(speed);
 }
+/*
+void torriesFlow(){
+  const uint16_t columnSize = NUM_LEDS/7;
+  for(uint8_t i=0; i<7; i++){
+    uint16_t columnStart = i * columnSize;
+    int columnEnd = columnStart + columnSize;
+    if(columnEnd >= NUM_LEDS)
+      columnEnd = NUM_LEDS - 1;
+
+    
+  }
+}*/
+
 
 void besinFlow(){
   bool   zero = speed==0? true: false;
@@ -169,14 +165,14 @@ void rainbowG() {
 
 void VU(){
   fill_solid(leds, NUM_LEDS, CRGB::Black);
-  bool   zero = speed==0? true: false;
+  bool   zero = speed==0? 1: 0;
   uint16_t  k = edges[speed]+1;
   uint8_t  hk = k/2;
   if(k%2 > 0) ++hk;
   uint16_t newSpec = map(spectrumAvg,0,255,0,(zero? k-1: hk-1));
-  for(uint16_t i=0; i<(zero? k: hk); ++i){
-    int j = map(i,0,(zero? k-1: hk-1),0,(zero? 255: 127));
-    if(i <= newSpec){
+  for(uint16_t i=0; i<zero? k: hk; ++i){
+    uint8_t j = map(i,0, zero? k-1: hk-1, 0, zero? 255: 127);
+    if(i<=newSpec){
       leds[i]     = ColorFromPalette(pmd? palettes[currPalIdx]: gCurrentPalette, j);
       if(!zero)
       leds[k-1-i] = ColorFromPalette(pmd? palettes[currPalIdx]: gCurrentPalette, 255-j);
@@ -222,8 +218,8 @@ void byteColumns(){
 void peakColumns(){ fill_solid(leds, NUM_LEDS, CRGB::Black);
   const uint16_t columnSize = NUM_LEDS/7;
   for(uint8_t i=0; i<7; i++){
-    uint8_t columnHeight = map(spectrumValue[i], 0, 1223, 0, columnSize);
-    uint8_t   peakHeight = map(spectrumPeaks[i], 0, 1223, 0, columnSize);
+    uint8_t columnHeight = map(spectrumValue[i], 0, 1865, 0, columnSize);
+    uint8_t   peakHeight = map(spectrumByte[i], 0, 255, 0, columnSize);
     uint16_t columnStart = i * columnSize;
     uint16_t   columnEnd = columnStart + columnSize;
     if(columnEnd>=NUM_LEDS) columnEnd = NUM_LEDS - 1;
@@ -234,4 +230,12 @@ void peakColumns(){ fill_solid(leds, NUM_LEDS, CRGB::Black);
     if(k<NUM_LEDS && k<=columnEnd)
       leds[k] = CHSV(i * 40, 255, 255);
   }
+}
+
+void audioAnalyzer(){ fill_solid(leds, NUM_LEDS, CRGB::Black);
+  uint8_t ch = speed<7? speed: 6;
+  uint16_t audio = map(spectrumByte[ch], 0, 255, 0, NUM_LEDS-1);
+  for(uint16_t i=0; i<NUM_LEDS; ++i)
+    if(i<=audio)
+      leds[i] = ColorFromPalette(pmd? palettes[currPalIdx]: gCurrentPalette, i);
 }
